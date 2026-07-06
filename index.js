@@ -163,6 +163,6 @@ setInterval(async () => {
 
 loadMassiveLibrary().then(() => {
     testCommentsFlow();
-    setInterval(testCommentsFlow, 80000);
+    setInterval(testCommentsFlow, 90000);
 });
 
