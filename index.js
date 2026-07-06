@@ -4,21 +4,18 @@ const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.get('/', (req, res) => res.send('✅ البوت الإسلامي المطور يعمل بنجاح!'));
+app.get('/', (req, res) => res.send('✅ البوت الإسلامي يعمل بدون تكرار وبنصوص نظيفة!'));
 app.listen(PORT, () => console.log(`🌐 الخادم يعمل على المنفذ ${PORT}`));
 
-// إعدادات الحساب والتطبيق
 const MAIN_BASE_URL = 'https://anslayer.com/anime/public/anime-comments/';
 const CLIENT_ID = 'android-app2';
 const CLIENT_SECRET = '7befba6263cc14c90d2f1d6da2c5cf9b251bfbbd';
 const TOKEN = '2b6337657f73e45544604e3bfe3dc156442802d4';
 const TARGET_ANIME_ID = 2025;
 
-// المصفوفة الكلية ونظام المؤشر لمنع التكرار
 let readyTexts = [];
 let currentIndex = 0;
 
-// دالة لخلط المصفوفة عشوائياً (تُستدعى مرة واحدة لترتيب القائمة بالكامل)
 function shuffleArray(array) {
     for (let i = array.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -27,80 +24,68 @@ function shuffleArray(array) {
 }
 
 // ==========================================
-// 📚 دالة دمج المصادر لجمع أكثر من 600 نص منتقى
+// 📚 جلب الأذكار وتنظيفها من \n وتصفية الطويل منها
 // ==========================================
 async function loadMassiveLibrary() {
-    console.log('🔄 جارٍ جلب ودمج مصادر الأذكار والأحاديث ليوم كامل...');
-    
-    // استخدام Set لمنع أي تكرار نصوص بين المصادر المختلفة تلقائياً
+    console.log('🔄 جارٍ جلب وتنظيف الأذكار من المصدر...');
     const uniqueTexts = new Set();
 
-    // المصدر الأول: مكتبة الأذكار الشاملة (حوالي 300+ ذكر)
     try {
-        const res1 = await axios.get('https://raw.githubusercontent.com/nawafalqari/azkar-api/56df51279ab6eb86dc2f6202c7de26c8948331c1/azkar.json');
-        for (const category in res1.data) {
-            res1.data[category].forEach(item => {
-                if (item.content && item.content.trim().length > 10) {
-                    uniqueTexts.add(item.content.trim());
+        const res = await axios.get('https://raw.githubusercontent.com/nawafalqari/azkar-api/56df51279ab6eb86dc2f6202c7de26c8948331c1/azkar.json');
+        
+        for (const category in res.data) {
+            res.data[category].forEach(item => {
+                if (item.content) {
+                    // 1. تنظيف النص من علامات السطر الجديد \n واستبدالها بمسافة
+                    let cleanText = item.content.replace(/\\n|\n/g, ' ');
+                    // 2. إزالة المسافات المزدوجة الناتجة عن التنظيف
+                    cleanText = cleanText.replace(/\s+/g, ' ').trim();
+                    
+                    // 3. أخذ النصوص المعبرة والقصيرة فقط (أقل من 200 حرف ليكون التعليق مرتباً)
+                    if (cleanText.length > 10 && cleanText.length < 200) {
+                        uniqueTexts.add(cleanText);
+                    }
                 }
             });
         }
-    } catch (e) { console.log('⚠️ تنبيه: فشل سحب المصدر الأول.'); }
+    } catch (e) { 
+        console.log('⚠️ فشل السحب من الرابط، سيتم استخدام القائمة البديلة.'); 
+    }
 
-    // المصدر الثاني: قاعدة بيانات الأذكار والأدعية المنتقاة (حوالي 350+ نص إضافي)
-    try {
-        const res2 = await axios.get('https://raw.githubusercontent.com/Adham901/Azkar-API/main/azkar.json');
-        if (Array.isArray(res2.data)) {
-            res2.data.forEach(item => {
-                if (item.zekr && item.zekr.trim().length > 10) {
-                    uniqueTexts.add(item.zekr.trim());
-                }
-            });
-        }
-    } catch (e) { console.log('⚠️ تنبيه: فشل سحب المصدر الثاني.'); }
-
-    // تحويل الـ Set إلى مصفوفة عادية لجدولتها
     readyTexts = Array.from(uniqueTexts);
 
-    // إضافة آيات منتقاة بشرياً ومبشرة للقائمة
+    // إضافة آيات وأحاديث مختارة ومبشرة (صافية تماماً)
     const holyAyahs = [
-        "📖 { فَاذْكُرُونِي أَسْتَجِبْ لَكُمْ } [البقرة: 152]",
+        "📖 { فَاذْكُرُونِي أَذْكُرْكُمْ } [البقرة: 152]",
         "📖 { وَرَحْمَتِي وَسِعَتْ كُلَّ شَيْءٍ } [الأعراف: 156]",
         "📖 { إِنَّ مَعَ الْعُسْرِ يُسْرًا } [الشرح: 6]",
         "📖 { وَإِذَا سَأَلَكَ عِبَادِي عَنِّي فَإِنِّي قَرِيبٌ أُجِيبُ دَعْوَةَ الدَّاعِ } [البقرة: 186]",
         "📖 { أَلَا بِذِكْرِ اللَّهِ تَطْمَئِنُّ الْقُلُوبُ } [الرعد: 28]",
         "📖 { وَمَا كَانَ اللَّهُ مُعَذِّبَهُمْ وَهُمْ يَسْتَغْفِرُونَ } [الأنفال: 33]",
-        "📖 { قُلْ يَا عِبَادِيَ الَّذِينَ أَسْرَفُوا عَلَى أَنفُسِهِمْ لَا تَقْنَطُوا مِن رَّحْمَةِ اللَّهِ } [الزمر: 53]"
+        "سبحان الله وبحمده، سبحان الله العظيم.",
+        "استغفر الله العظيم الذي لا إله إلا هو الحي القيوم وأتوب إليه.",
+        "لا حول ولا قوة إلا بالله العلي العظيم.",
+        "اللهم صل وسلم وبارك على نبينا محمد وعلى آله وصحبه أجمعين.",
+        "لا إله إلا الله وحده لا شريك له، له الملك وله الحمد وهو على كل شيء قدير.",
+        "يا مقلب القلوب ثبت قلبي على دينك.",
+        "اللهم إنك عفو تحب العفو فاعف عنا."
     ];
     
     readyTexts = readyTexts.concat(holyAyahs);
 
-    if (readyTexts.length < 500) {
-        console.log(`⚠️ عدد النصوص المدمجة (${readyTexts.length}) أقل من 500. سيتم ملء النقص بأدعية مأثورة.`);
-        // نصوص احتياطية لضمان تخطي حاجز الـ 500 قطعيّاً
-        while(readyTexts.length < 550) {
-            readyTexts.push(`اللهم صل وسلم على نبينا محمد - تكرار مبارك رقم ${readyTexts.length}`);
-        }
-    }
-
-    // خلط القائمة كاملة مرة واحدة بشكل عشوائي عند بداية التشغيل
+    // خلط القائمة لضمان عدم الترتيب النمطي
     shuffleArray(readyTexts);
-    console.log(`✅ تم دمج وتجهيز [ ${readyTexts.length} ] ذكر وآية وحديث منتقى وخالٍ من التكرار!`);
+    console.log(`✅ تم دمج وتجهيز [ ${readyTexts.length} ] ذكر وآية نظيفة ومرتبة!`);
 }
 
-// ==========================================
-// 🚀 نظام الطابور: جلب النص التالي بالترتيب الصارم
-// ==========================================
 function getNextIslamicText() {
-    // إذا وصلنا لنهاية القائمة الضخمة، أعد خلطها وابدأ من الصفر
     if (currentIndex >= readyTexts.length) {
         shuffleArray(readyTexts);
         currentIndex = 0;
-        console.log('🔄 تم الانتهاء من جميع النصوص، وإعادة خلط القائمة لليوم الجديد.');
+        console.log('🔄 تم الانتهاء من جميع النصوص، وإعادة خلط القائمة للبدء من جديد.');
     }
-    
     const text = readyTexts[currentIndex];
-    currentIndex++; // الانتقال للنص التالي في الدورة القادمة
+    currentIndex++;
     return text;
 }
 
@@ -135,10 +120,8 @@ async function testCommentsFlow() {
 
     if (!firstCommentId) return;
 
-    // جلب النص التالي المضمون عدم تكراره
     const replyText = getNextIslamicText();
-
-    console.log(`\n📬 [الذكر رقم ${currentIndex}]: جارٍ إرساله إلى التعليق [${firstCommentId}]...`);
+    console.log(`\n📬 [الذكر رقم ${currentIndex}]: جارٍ إرساله...`);
 
     try {
         await axios.post(`${MAIN_BASE_URL}create-anime-comment-reply`, {
@@ -155,15 +138,30 @@ async function testCommentsFlow() {
                 'Authorization': `Bearer ${TOKEN}`
             }
         });
-        console.log('✅ تم النشر بنجاح.');
+        console.log(`✅ تم نشر: ${replyText.substring(0, 30)}...`);
     } catch (error) {
         console.log('❌ فشل إرسال الرد الحالي.');
     }
 }
 
-// بدء تحميل القائمة الضخمة ثم إطلاق المؤقت الزمني
+// ==========================================
+// ⏰ دالة منع النوم (لإبقاء سيرفر ريندر مستيقظاً)
+// ==========================================
+// ⚠️ تذكر: إذا كنت تستخدم Render، ضع رابط موقعك هنا بدلاً من localhost
+const RENDER_APP_URL = 'https://anslayer-bot.onrender.com'; 
+
+setInterval(async () => {
+    try {
+        await axios.get(RENDER_APP_URL);
+        console.log('⏰ تم إرسال نبضة تنشيط لمنع السيرفر من النوم.');
+    } catch (error) {
+        console.log('⚠️ نبضة التنشيط تعمل.');
+    }
+}, 600000); 
+
+// التشغيل الأساسي
 loadMassiveLibrary().then(() => {
     testCommentsFlow();
-    setInterval(testCommentsFlow, 61000); // 61 ثانية بدقة
+    setInterval(testCommentsFlow, 61000);
 });
 
