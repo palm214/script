@@ -4,7 +4,7 @@ const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.get('/', (req, res) => res.send('✅ البوت الإسلامي يعمل بدون تكرار وبنصوص نظيفة!'));
+app.get('/', (req, res) => res.send('✅ البوت الإسلامي يعمل بنصوص نقية وصافية!'));
 app.listen(PORT, () => console.log(`🌐 الخادم يعمل على المنفذ ${PORT}`));
 
 const MAIN_BASE_URL = 'https://anslayer.com/anime/public/anime-comments/';
@@ -24,7 +24,7 @@ function shuffleArray(array) {
 }
 
 // ==========================================
-// 📚 جلب الأذكار وتنظيفها من \n وتصفية الطويل منها
+// 📚 جلب الأذكار وتنظيفها من الشوائب البرمجية
 // ==========================================
 async function loadMassiveLibrary() {
     console.log('🔄 جارٍ جلب وتنظيف الأذكار من المصدر...');
@@ -36,13 +36,20 @@ async function loadMassiveLibrary() {
         for (const category in res.data) {
             res.data[category].forEach(item => {
                 if (item.content) {
-                    // 1. تنظيف النص من علامات السطر الجديد \n واستبدالها بمسافة
-                    let cleanText = item.content.replace(/\\n|\n/g, ' ');
-                    // 2. إزالة المسافات المزدوجة الناتجة عن التنظيف
+                    // تحويل المحتوى إلى نص في حال كان مصفوفة
+                    let cleanText = typeof item.content === 'string' ? item.content : String(item.content);
+                    
+                    // 1. إزالة أسطر \n واستبدالها بمسافة
+                    cleanText = cleanText.replace(/\\n|\n/g, ' ');
+                    
+                    // 2. إزالة الفواصل الإنجليزية وعلامات التنصيص التي تشوه النص (', ")
+                    cleanText = cleanText.replace(/['",]/g, '');
+                    
+                    // 3. إزالة المسافات المزدوجة الناتجة عن التنظيف
                     cleanText = cleanText.replace(/\s+/g, ' ').trim();
                     
-                    // 3. أخذ النصوص المعبرة والقصيرة فقط (أقل من 200 حرف ليكون التعليق مرتباً)
-                    if (cleanText.length > 10 && cleanText.length < 200) {
+                    // 4. أخذ النصوص المعبرة والقصيرة فقط
+                    if (cleanText.length > 10 && cleanText.length < 250) {
                         uniqueTexts.add(cleanText);
                     }
                 }
@@ -54,7 +61,7 @@ async function loadMassiveLibrary() {
 
     readyTexts = Array.from(uniqueTexts);
 
-    // إضافة آيات وأحاديث مختارة ومبشرة (صافية تماماً)
+    // إضافة آيات وأحاديث مختارة ومبشرة يدوياً
     const holyAyahs = [
         "📖 { فَاذْكُرُونِي أَذْكُرْكُمْ } [البقرة: 152]",
         "📖 { وَرَحْمَتِي وَسِعَتْ كُلَّ شَيْءٍ } [الأعراف: 156]",
@@ -73,9 +80,8 @@ async function loadMassiveLibrary() {
     
     readyTexts = readyTexts.concat(holyAyahs);
 
-    // خلط القائمة لضمان عدم الترتيب النمطي
     shuffleArray(readyTexts);
-    console.log(`✅ تم دمج وتجهيز [ ${readyTexts.length} ] ذكر وآية نظيفة ومرتبة!`);
+    console.log(`✅ تم دمج وتجهيز [ ${readyTexts.length} ] ذكر وآية نظيفة كلياً!`);
 }
 
 function getNextIslamicText() {
@@ -138,28 +144,23 @@ async function testCommentsFlow() {
                 'Authorization': `Bearer ${TOKEN}`
             }
         });
-        console.log(`✅ تم نشر: ${replyText.substring(0, 30)}...`);
+        console.log(`✅ تم نشر: ${replyText.substring(0, 35)}...`);
     } catch (error) {
         console.log('❌ فشل إرسال الرد الحالي.');
     }
 }
 
-// ==========================================
-// ⏰ دالة منع النوم (لإبقاء سيرفر ريندر مستيقظاً)
-// ==========================================
-// ⚠️ تذكر: إذا كنت تستخدم Render، ضع رابط موقعك هنا بدلاً من localhost
-const RENDER_APP_URL = 'https://anslayer-bot.onrender.com'; 
+// ⏰ دالة منع النوم 
+const RENDER_APP_URL = 'https://anslayer-bot.onrender.com'; // تأكد أن هذا هو رابطك في ريندر
 
 setInterval(async () => {
     try {
         await axios.get(RENDER_APP_URL);
-        console.log('⏰ تم إرسال نبضة تنشيط لمنع السيرفر من النوم.');
     } catch (error) {
-        console.log('⚠️ نبضة التنشيط تعمل.');
+        // تجاهل بصمت
     }
 }, 600000); 
 
-// التشغيل الأساسي
 loadMassiveLibrary().then(() => {
     testCommentsFlow();
     setInterval(testCommentsFlow, 61000);
