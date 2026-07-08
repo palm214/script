@@ -151,7 +151,7 @@ async function testCommentsFlow() {
 }
 
 // ⏰ دالة منع النوم 
-const RENDER_APP_URL = 'https://anslayer-bot.onrender.com'; // تأكد أن هذا هو رابطك في ريندر
+const RENDER_APP_URL = 'https://script-gg76.onrender.com'; // تأكد أن هذا هو رابطك في ريندر
 
 setInterval(async () => {
     try {
