@@ -11,7 +11,6 @@ const MAIN_BASE_URL = 'https://anslayer.com/anime/public/anime-comments/';
 const CLIENT_ID = 'android-app2';
 const CLIENT_SECRET = '7befba6263cc14c90d2f1d6da2c5cf9b251bfbbd';
 const TOKEN = '2b6337657f73e45544604e3bfe3dc156442802d4';
-const TARGET_ANIME_ID = 2025;
 
 let readyTexts = [];
 let currentIndex = 0;
@@ -36,19 +35,11 @@ async function loadMassiveLibrary() {
         for (const category in res.data) {
             res.data[category].forEach(item => {
                 if (item.content) {
-                    // تحويل المحتوى إلى نص في حال كان مصفوفة
                     let cleanText = typeof item.content === 'string' ? item.content : String(item.content);
-                    
-                    // 1. إزالة أسطر \n واستبدالها بمسافة
                     cleanText = cleanText.replace(/\\n|\n/g, ' ');
-                    
-                    // 2. إزالة الفواصل الإنجليزية وعلامات التنصيص التي تشوه النص (', ")
                     cleanText = cleanText.replace(/['",]/g, '');
-                    
-                    // 3. إزالة المسافات المزدوجة الناتجة عن التنظيف
                     cleanText = cleanText.replace(/\s+/g, ' ').trim();
                     
-                    // 4. أخذ النصوص المعبرة والقصيرة فقط
                     if (cleanText.length > 10 && cleanText.length < 250) {
                         uniqueTexts.add(cleanText);
                     }
@@ -61,7 +52,6 @@ async function loadMassiveLibrary() {
 
     readyTexts = Array.from(uniqueTexts);
 
-    // إضافة آيات وأحاديث مختارة ومبشرة يدوياً
     const holyAyahs = [
         "📖 { فَاذْكُرُونِي أَذْكُرْكُمْ } [البقرة: 152]",
         "📖 { وَرَحْمَتِي وَسِعَتْ كُلَّ شَيْءٍ } [الأعراف: 156]",
@@ -79,7 +69,6 @@ async function loadMassiveLibrary() {
     ];
     
     readyTexts = readyTexts.concat(holyAyahs);
-
     shuffleArray(readyTexts);
     console.log(`✅ تم دمج وتجهيز [ ${readyTexts.length} ] ذكر وآية نظيفة كلياً!`);
 }
@@ -95,13 +84,14 @@ function getNextIslamicText() {
     return text;
 }
 
-async function testCommentsFlow() {
+// تعديل الدالة لتستقبل رقم الأنمي كمتغير لإعادة استخدامها
+async function testCommentsFlow(animeId) {
     if (readyTexts.length === 0) return;
 
     let firstCommentId = null;
 
     try {
-        const jsonQuery = encodeURIComponent(JSON.stringify({ anime_id: TARGET_ANIME_ID, page: 1 }));
+        const jsonQuery = encodeURIComponent(JSON.stringify({ anime_id: animeId, page: 1 }));
         const commentsRes = await axios.get(`${MAIN_BASE_URL}get-anime-comments?json=${jsonQuery}`, {
             headers: {
                 'User-Agent': 'Dalvik/2.1.0 (Linux; U; Android 11; Build/RP1A.200720.011)',
@@ -127,7 +117,7 @@ async function testCommentsFlow() {
     if (!firstCommentId) return;
 
     const replyText = getNextIslamicText();
-    console.log(`\n📬 [الذكر رقم ${currentIndex}]: جارٍ إرساله...`);
+    console.log(`\n📬 [أنمي ${animeId}] - [الذكر رقم ${currentIndex}]: جارٍ إرساله...`);
 
     try {
         await axios.post(`${MAIN_BASE_URL}create-anime-comment-reply`, {
@@ -144,14 +134,14 @@ async function testCommentsFlow() {
                 'Authorization': `Bearer ${TOKEN}`
             }
         });
-        console.log(`✅ تم نشر: ${replyText.substring(0, 35)}...`);
+        console.log(`✅ [أنمي ${animeId}] تم نشر: ${replyText.substring(0, 35)}...`);
     } catch (error) {
-        console.log('❌ فشل إرسال الرد الحالي.');
+        console.log(`❌ فشل إرسال الرد الحالي للأنمي ${animeId}.`);
     }
 }
 
 // ⏰ دالة منع النوم 
-const RENDER_APP_URL = 'https://script-gg76.onrender.com'; // تأكد أن هذا هو رابطك في ريندر
+const RENDER_APP_URL = 'https://script-gg76.onrender.com'; 
 
 setInterval(async () => {
     try {
@@ -161,8 +151,24 @@ setInterval(async () => {
     }
 }, 600000); 
 
+// ==========================================
+// 🚀 إدارة تشغيل الفترات الزمنية الذكية
+// ==========================================
 loadMassiveLibrary().then(() => {
-    testCommentsFlow();
-    setInterval(testCommentsFlow, 180000);
-});
+    
+    // 1️⃣ أنمي رقم 2025: يعمل كل 3 دقائق (180000 ملي ثانية)
+    testCommentsFlow(2025); // تشغيل فوري لأول مرة
+    setInterval(() => {
+        testCommentsFlow(2025);
+    }, 180000);
 
+    // 2️⃣ أنمي رقم 2021: يعمل كل 30 دقيقة (1800000 ملي ثانية)
+    // تم وضع تأخير مبدئي مدته دقيقة واحدة (60000 ملي ثانية) لمنع أي تصادم مع الأول
+    setTimeout(() => {
+        testCommentsFlow(2021); // يشتغل لأول مرة بعد مرور دقيقة
+        setInterval(() => {
+            testCommentsFlow(2021);
+        }, 1800000); // يستمر بعدها كل 30 دقيقة
+    }, 60000);
+
+});
