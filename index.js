@@ -1,10 +1,24 @@
+// ==========================================
+// ⚙️ إعدادات الوقت (يمكنك تعديلها من هنا)
+// ==========================================
+// الأرقام بالملي ثانية (1 دقيقة = 60000 ملي ثانية)
+
+const ANIME_1_ID = 2025;
+const ANIME_1_LOOP_TIME = 3 * 60 * 1000; // يعيد كل 3 دقائق
+
+const ANIME_2_ID = 2021;
+const ANIME_2_FIRST_DELAY = 1 * 60 * 1000; // يرسل أول مرة بعد دقيقة واحدة من تشغيل السكربت
+const ANIME_2_LOOP_TIME = 30 * 60 * 1000; // ثم يعيد كل 30 دقيقة
+
+// ==========================================
+
 const axios = require('axios');
 const express = require('express');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.get('/', (req, res) => res.send('✅ البوت الإسلامي يعمل بنصوص نقية وصافية!'));
+app.get('/', (req, res) => res.send('✅ البوت الإسلامي يعمل بنصوص نقية وتوقيت دقيق!'));
 app.listen(PORT, () => console.log(`🌐 الخادم يعمل على المنفذ ${PORT}`));
 
 const MAIN_BASE_URL = 'https://anslayer.com/anime/public/anime-comments/';
@@ -12,9 +26,15 @@ const CLIENT_ID = 'android-app2';
 const CLIENT_SECRET = '7befba6263cc14c90d2f1d6da2c5cf9b251bfbbd';
 const TOKEN = '2b6337657f73e45544604e3bfe3dc156442802d4';
 
-let readyTexts = [];
-let currentIndex = 0;
+// المصفوفات والمتغيرات
+let apiTexts = [];
+let fallbackTexts = [];
+let apiIndex = 0;
+let fallbackIndex = 0;
+let useOnlyFallback = false;
+let messageCounter = 0; // حاسبة لمعرفة متى نستخدم القائمة البديلة
 
+// دالة لخلط المصفوفات
 function shuffleArray(array) {
     for (let i = array.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -22,12 +42,50 @@ function shuffleArray(array) {
     }
 }
 
+// القائمة البديلة الطويلة
+const fallbackLibrary = [
+    "📖 { فَاذْكُرُونِي أَذْكُرْكُمْ } [البقرة: 152]",
+    "📖 { وَرَحْمَتِي وَسِعَتْ كُلَّ شَيْءٍ } [الأعراف: 156]",
+    "📖 { إِنَّ مَعَ الْعُسْرِ يُسْرًا } [الشرح: 6]",
+    "📖 { وَإِذَا سَأَلَكَ عِبَادِي عَنِّي فَإِنِّي قَرِيبٌ } [البقرة: 186]",
+    "📖 { أَلَا بِذِكْرِ اللَّهِ تَطْمَئِنُّ الْقُلُوبُ } [الرعد: 28]",
+    "📖 { وَمَا كَانَ اللَّهُ مُعَذِّبَهُمْ وَهُمْ يَسْتَغْفِرُونَ } [الأنفال: 33]",
+    "سبحان الله وبحمده، سبحان الله العظيم.",
+    "استغفر الله العظيم الذي لا إله إلا هو الحي القيوم وأتوب إليه.",
+    "لا حول ولا قوة إلا بالله العلي العظيم.",
+    "اللهم صل وسلم وبارك على نبينا محمد وعلى آله وصحبه أجمعين.",
+    "لا إله إلا الله وحده لا شريك له، له الملك وله الحمد وهو على كل شيء قدير.",
+    "يا مقلب القلوب ثبت قلبي على دينك.",
+    "اللهم إنك عفو تحب العفو فاعف عنا.",
+    "حسبي الله لا إله إلا هو، عليه توكلت وهو رب العرش العظيم.",
+    "اللهم إني أسألك الجنة وأعوذ بك من النار.",
+    "اللهم آتنا في الدنيا حسنة وفي الآخرة حسنة وقنا عذاب النار.",
+    "رضيت بالله ربا، وبالإسلام دينا، وبمحمد صلى الله عليه وسلم نبيا.",
+    "سبحان الله، والحمد لله، ولا إله إلا الله، والله أكبر.",
+    "اللهم أعني على ذكرك وشكرك وحسن عبادتك.",
+    "لا إله إلا أنت سبحانك إني كنت من الظالمين.",
+    "اللهم اغفر لي ذنبي كله، دقه وجله، وأوله وآخره، وعلانيته وسره.",
+    "اللهم إني أسألك العفو والعافية في الدنيا والآخرة.",
+    "اللهم اكفني بحلالك عن حرامك، وأغنني بفضلك عمن سواك.",
+    "الحمد لله الذي أطعمنا وسقانا وجعلنا مسلمين.",
+    "اللهم قني عذابك يوم تبعث عبادك.",
+    "بسم الله الذي لا يضر مع اسمه شيء في الأرض ولا في السماء وهو السميع العليم.",
+    "اللهم عالم الغيب والشهادة، فاطر السماوات والأرض، رب كل شيء ومليكه.",
+    "أعوذ بكلمات الله التامات من شر ما خلق.",
+    "اللهم إني أعوذ بك من الهم والحزن، والعجز والكسل، والبخل والجبن.",
+    "اللهم اغفر للمسلمين والمسلمات والمؤمنين والمؤمنات الأحياء منهم والأموات."
+];
+
 // ==========================================
-// 📚 جلب الأذكار وتنظيفها من الشوائب البرمجية
+// 📚 جلب الأذكار وتنظيفها
 // ==========================================
 async function loadMassiveLibrary() {
     console.log('🔄 جارٍ جلب وتنظيف الأذكار من المصدر...');
     const uniqueTexts = new Set();
+    
+    // تجهيز القائمة البديلة
+    fallbackTexts = [...fallbackLibrary];
+    shuffleArray(fallbackTexts);
 
     try {
         const res = await axios.get('https://raw.githubusercontent.com/nawafalqari/azkar-api/56df51279ab6eb86dc2f6202c7de26c8948331c1/azkar.json');
@@ -46,51 +104,51 @@ async function loadMassiveLibrary() {
                 }
             });
         }
+        apiTexts = Array.from(uniqueTexts);
+        shuffleArray(apiTexts);
+        console.log(`✅ تم جلب [ ${apiTexts.length} ] ذكر من الرابط.`);
     } catch (e) { 
-        console.log('⚠️ فشل السحب من الرابط، سيتم استخدام القائمة البديلة.'); 
+        console.log('⚠️ فشل السحب من الرابط، سيتم الاعتماد كلياً على القائمة البديلة.'); 
+        useOnlyFallback = true;
     }
-
-    readyTexts = Array.from(uniqueTexts);
-
-    const holyAyahs = [
-        "📖 { فَاذْكُرُونِي أَذْكُرْكُمْ } [البقرة: 152]",
-        "📖 { وَرَحْمَتِي وَسِعَتْ كُلَّ شَيْءٍ } [الأعراف: 156]",
-        "📖 { إِنَّ مَعَ الْعُسْرِ يُسْرًا } [الشرح: 6]",
-        "📖 { وَإِذَا سَأَلَكَ عِبَادِي عَنِّي فَإِنِّي قَرِيبٌ أُجِيبُ دَعْوَةَ الدَّاعِ } [البقرة: 186]",
-        "📖 { أَلَا بِذِكْرِ اللَّهِ تَطْمَئِنُّ الْقُلُوبُ } [الرعد: 28]",
-        "📖 { وَمَا كَانَ اللَّهُ مُعَذِّبَهُمْ وَهُمْ يَسْتَغْفِرُونَ } [الأنفال: 33]",
-        "سبحان الله وبحمده، سبحان الله العظيم.",
-        "استغفر الله العظيم الذي لا إله إلا هو الحي القيوم وأتوب إليه.",
-        "لا حول ولا قوة إلا بالله العلي العظيم.",
-        "اللهم صل وسلم وبارك على نبينا محمد وعلى آله وصحبه أجمعين.",
-        "لا إله إلا الله وحده لا شريك له، له الملك وله الحمد وهو على كل شيء قدير.",
-        "يا مقلب القلوب ثبت قلبي على دينك.",
-        "اللهم إنك عفو تحب العفو فاعف عنا."
-    ];
-    
-    readyTexts = readyTexts.concat(holyAyahs);
-    shuffleArray(readyTexts);
-    console.log(`✅ تم دمج وتجهيز [ ${readyTexts.length} ] ذكر وآية نظيفة كلياً!`);
 }
 
+// ==========================================
+// ⚖️ نظام اختيار النص (5 من الرابط، 1 من البديلة)
+// ==========================================
 function getNextIslamicText() {
-    if (currentIndex >= readyTexts.length) {
-        shuffleArray(readyTexts);
-        currentIndex = 0;
-        console.log('🔄 تم الانتهاء من جميع النصوص، وإعادة خلط القائمة للبدء من جديد.');
+    // إذا فشل الرابط تماماً، نأخذ من القائمة البديلة فقط
+    if (useOnlyFallback || apiTexts.length === 0) {
+        if (fallbackIndex >= fallbackTexts.length) {
+            shuffleArray(fallbackTexts);
+            fallbackIndex = 0;
+        }
+        return fallbackTexts[fallbackIndex++];
     }
-    const text = readyTexts[currentIndex];
-    currentIndex++;
-    return text;
+
+    messageCounter++;
+
+    // كل 6 رسائل، أرسل الرسالة السادسة من القائمة البديلة (بمعنى 5 من الرابط و 1 بديلة)
+    if (messageCounter % 6 === 0) {
+        if (fallbackIndex >= fallbackTexts.length) {
+            shuffleArray(fallbackTexts);
+            fallbackIndex = 0;
+        }
+        return fallbackTexts[fallbackIndex++];
+    } else {
+        // خلاف ذلك أرسل من الرابط
+        if (apiIndex >= apiTexts.length) {
+            shuffleArray(apiTexts);
+            apiIndex = 0;
+        }
+        return apiTexts[apiIndex++];
+    }
 }
 
-// دالة الفحص والإرسال المحسنة
+// ==========================================
+// 🚀 دالة إرسال التعليق
+// ==========================================
 async function testCommentsFlow(animeId) {
-    if (readyTexts.length === 0) {
-        console.log(`⚠️ مصفوفة النصوص فارغة، لا يمكن الإرسال لأنمي ${animeId}`);
-        return;
-    }
-
     let firstCommentId = null;
 
     try {
@@ -114,17 +172,13 @@ async function testCommentsFlow(animeId) {
             firstCommentId = sample.anime_comment_id || sample.comment_id || sample.id;
         }
     } catch (error) {
-        console.log(`❌ خطأ أثناء جلب تعليقات أنمي ${animeId}:`, error.message);
         return; 
     }
 
-    if (!firstCommentId) {
-        console.log(`⚠️ أنمي ${animeId} لم نجد فيه أي تعليق رئيسي لنقوم بالرد عليه حالياً!`);
-        return;
-    }
+    if (!firstCommentId) return;
 
     const replyText = getNextIslamicText();
-    console.log(`📬 [أنمي ${animeId}] - [الذكر رقم ${currentIndex}]: جارٍ إرساله...`);
+    console.log(`\n📬 [أنمي ${animeId}]: جارٍ إرسال رد...`);
 
     try {
         await axios.post(`${MAIN_BASE_URL}create-anime-comment-reply`, {
@@ -141,9 +195,9 @@ async function testCommentsFlow(animeId) {
                 'Authorization': `Bearer ${TOKEN}`
             }
         });
-        console.log(`✅ [أنمي ${animeId}] تم نشر الرد بنجاح: ${replyText.substring(0, 35)}...`);
+        console.log(`✅ [أنمي ${animeId}] تم نشر: ${replyText.substring(0, 35)}...`);
     } catch (error) {
-        console.log(`❌ فشل إرسال الرد للأنمي ${animeId}. الرد من السيرفر:`, error.response?.data || error.message);
+        console.log(`❌ فشل إرسال الرد الحالي للأنمي ${animeId}.`);
     }
 }
 
@@ -159,32 +213,24 @@ setInterval(async () => {
 }, 600000); 
 
 // ==========================================
-// 🚀 إدارة التوقيت الذكي بدون تعارض
+// 🚀 التشغيل المبرمج والذكي
 // ==========================================
 loadMassiveLibrary().then(() => {
     
-    // 1️⃣ أنمي 2025: يعلق فوراً الآن، ثم كل 3 دقائق
-    console.log('🎬 [أنمي 2025] تشغيل فوري للتعليق الأول...');
-    testCommentsFlow(2025); 
-    
+    console.log("▶️ بدء تشغيل السكربتات...");
+
+    // 1️⃣ تشغيل أنمي 2025 (أبو 3 دقائق) فوراً، ثم تكراره
+    testCommentsFlow(ANIME_1_ID);
     setInterval(() => {
-        console.log('⏰ حان موعد أنمي 2025 الدوري (كل 3 دقائق)');
-        testCommentsFlow(2025);
-    }, 180000);
+        testCommentsFlow(ANIME_1_ID);
+    }, ANIME_1_LOOP_TIME);
 
-    // 2️⃣ أنمي 2021: ينتظر دقيقة واحدة فقط ثم يعلق مباشرة، ثم يبدأ دورة الـ 30 دقيقة
-    console.log('⏳ [أنمي 2021] تم جدولة أول تعليق ليكون بعد دقيقة واحدة بالضبط من الآن...');
-    
+    // 2️⃣ تشغيل أنمي 2021 (أبو 30 دقيقة) بعد انتظار الدقيقة الأولى، ثم تكراره
     setTimeout(() => {
-        console.log('🔔 [أنمي 2021] مرت دقيقة! جاري إرسال التعليق الأول بدون انتظار الـ 30 دقيقة...');
-        testCommentsFlow(2021); 
-
-        // بعد إرسال أول تعليق بنجاح، نفتح الـ Interval ليعيد الكرة كل 30 دقيقة
+        testCommentsFlow(ANIME_2_ID); // يشتغل أول مرة هنا!
         setInterval(() => {
-            console.log('⏰ حان موعد أنمي 2021 الدوري (كل 30 دقيقة)');
-            testCommentsFlow(2021);
-        }, 1800000);
-
-    }, 60000); // 60000 ملي ثانية = دقيقة واحدة
+            testCommentsFlow(ANIME_2_ID);
+        }, ANIME_2_LOOP_TIME); // ثم يبدأ بتكرار نفسه كل 30 دقيقة
+    }, ANIME_2_FIRST_DELAY);
 
 });
