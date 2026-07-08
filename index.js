@@ -23,7 +23,7 @@ function shuffleArray(array) {
 }
 
 // ==========================================
-// 📚 جلب الأذكار وتنظيفها من الشوائب البرمجيةن
+// 📚 جلب الأذكار وتنظيفها من الشوائب البرمجية
 // ==========================================
 async function loadMassiveLibrary() {
     console.log('🔄 جارٍ جلب وتنظيف الأذكار من المصدر...');
@@ -84,9 +84,12 @@ function getNextIslamicText() {
     return text;
 }
 
-// تعديل الدالة لتستقبل رقم الأنمي كمتغير لإعادة استخدامها
+// دالة الفحص والإرسال المحسنة
 async function testCommentsFlow(animeId) {
-    if (readyTexts.length === 0) return;
+    if (readyTexts.length === 0) {
+        console.log(`⚠️ مصفوفة النصوص فارغة، لا يمكن الإرسال لأنمي ${animeId}`);
+        return;
+    }
 
     let firstCommentId = null;
 
@@ -111,13 +114,17 @@ async function testCommentsFlow(animeId) {
             firstCommentId = sample.anime_comment_id || sample.comment_id || sample.id;
         }
     } catch (error) {
+        console.log(`❌ خطأ أثناء جلب تعليقات أنمي ${animeId}:`, error.message);
         return; 
     }
 
-    if (!firstCommentId) return;
+    if (!firstCommentId) {
+        console.log(`⚠️ أنمي ${animeId} لم نجد فيه أي تعليق رئيسي لنقوم بالرد عليه حالياً!`);
+        return;
+    }
 
     const replyText = getNextIslamicText();
-    console.log(`\n📬 [أنمي ${animeId}] - [الذكر رقم ${currentIndex}]: جارٍ إرساله...`);
+    console.log(`📬 [أنمي ${animeId}] - [الذكر رقم ${currentIndex}]: جارٍ إرساله...`);
 
     try {
         await axios.post(`${MAIN_BASE_URL}create-anime-comment-reply`, {
@@ -134,9 +141,9 @@ async function testCommentsFlow(animeId) {
                 'Authorization': `Bearer ${TOKEN}`
             }
         });
-        console.log(`✅ [أنمي ${animeId}] تم نشر: ${replyText.substring(0, 35)}...`);
+        console.log(`✅ [أنمي ${animeId}] تم نشر الرد بنجاح: ${replyText.substring(0, 35)}...`);
     } catch (error) {
-        console.log(`❌ فشل إرسال الرد الحالي للأنمي ${animeId}.`);
+        console.log(`❌ فشل إرسال الرد للأنمي ${animeId}. الرد من السيرفر:`, error.response?.data || error.message);
     }
 }
 
@@ -152,23 +159,32 @@ setInterval(async () => {
 }, 600000); 
 
 // ==========================================
-// 🚀 إدارة تشغيل الفترات الزمنية الذكية
+// 🚀 إدارة التوقيت الذكي بدون تعارض
 // ==========================================
 loadMassiveLibrary().then(() => {
     
-    // 1️⃣ أنمي رقم 2025: يعمل كل 3 دقائق (180000 ملي ثانية)
-    testCommentsFlow(2025); // تشغيل فوري لأول مرة
+    // 1️⃣ أنمي 2025: يعلق فوراً الآن، ثم كل 3 دقائق
+    console.log('🎬 [أنمي 2025] تشغيل فوري للتعليق الأول...');
+    testCommentsFlow(2025); 
+    
     setInterval(() => {
+        console.log('⏰ حان موعد أنمي 2025 الدوري (كل 3 دقائق)');
         testCommentsFlow(2025);
     }, 180000);
 
-    // 2️⃣ أنمي رقم 2021: يعمل كل 30 دقيقة (1800000 ملي ثانية)
-    // تم وضع تأخير مبدئي مدته دقيقة واحدة (60000 ملي ثانية) لمنع أي تصادم مع الأول
+    // 2️⃣ أنمي 2021: ينتظر دقيقة واحدة فقط ثم يعلق مباشرة، ثم يبدأ دورة الـ 30 دقيقة
+    console.log('⏳ [أنمي 2021] تم جدولة أول تعليق ليكون بعد دقيقة واحدة بالضبط من الآن...');
+    
     setTimeout(() => {
-        testCommentsFlow(2021); // يشتغل لأول مرة بعد مرور دقيقة
+        console.log('🔔 [أنمي 2021] مرت دقيقة! جاري إرسال التعليق الأول بدون انتظار الـ 30 دقيقة...');
+        testCommentsFlow(2021); 
+
+        // بعد إرسال أول تعليق بنجاح، نفتح الـ Interval ليعيد الكرة كل 30 دقيقة
         setInterval(() => {
+            console.log('⏰ حان موعد أنمي 2021 الدوري (كل 30 دقيقة)');
             testCommentsFlow(2021);
-        }, 1800000); // يستمر بعدها كل 30 دقيقة
-    }, 60000);
+        }, 1800000);
+
+    }, 60000); // 60000 ملي ثانية = دقيقة واحدة
 
 });
