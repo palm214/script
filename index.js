@@ -4,7 +4,7 @@
 // الأرقام بالملي ثانية (1 دقيقة = 60000 ملي ثانية)q
 
 const ANIME_1_ID = 2025;
-const ANIME_1_LOOP_TIME = 3 * 60 * 1000; // يعيد كل 3 دقائق
+const ANIME_1_LOOP_TIME = 3 * 70 * 1000; // يعيد كل 3 دقائق
 
 const ANIME_2_ID = 2021;
 const ANIME_2_FIRST_DELAY = 1 * 61 * 1000; // يرسل أول مرة بعد دقيقة واحدة من تشغيل السكربت
