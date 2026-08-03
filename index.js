@@ -24,7 +24,7 @@ app.listen(PORT, () => console.log(`🌐 الخادم يعمل على المنف
 const MAIN_BASE_URL = 'https://anslayer.com/anime/public/anime-comments/';
 const CLIENT_ID = 'android-app2';
 const CLIENT_SECRET = '7befba6263cc14c90d2f1d6da2c5cf9b251bfbbd';
-const TOKEN = 'a43d162ea59ecece87068557347587c0a8e5cc6e';
+const TOKEN = '8592bcb5adcb0b4ec83197160686db4ecad8e1e2';
 
 // المصفوفات والمتغيرات
 let apiTexts = [];
