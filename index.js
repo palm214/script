@@ -19,7 +19,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.get('/', (req, res) => res.send('✅ البوت الإسلامي يعمل بنصوص نقية وتوقيت دقيق!'));
-app.listen(PORT, () => console.log(🌐 الخادم يعمل على المنفذ ${PORT}`));
+app.listen(PORT, () => console.log(`🌐 الخادم يعمل على المنفذ ${PORT}`));
 
 const MAIN_BASE_URL = 'https://anslayer.com/anime/public/anime-comments/';
 const CLIENT_ID = 'android-app2';
