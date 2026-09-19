@@ -4,9 +4,9 @@
 // الأرقام بالملي ثانية (1 دقيقة = 60000 ملي ثانية)q
 
 const ANIME_1_ID = 2025;
-const ANIME_1_LOOP_TIME = 1 * 62 * 1000; // يعيد كل 3 دقائق
+const ANIME_1_LOOP_TIME = 2 * 62 * 1000; // يعيد كل 3 دقائق
 
-const ANIME_2_ID = 14029000;
+const ANIME_2_ID = 2021;
 const ANIME_2_FIRST_DELAY = 1 * 61 * 1000; // يرسل أول مرة بعد دقيقة واحدة من تشغيل السكربت
 const ANIME_2_LOOP_TIME = 15 * 60 * 1000; // ثم يعيد كل 30 دقيقة
 
@@ -24,7 +24,7 @@ app.listen(PORT, () => console.log(`🌐 الخادم يعمل على المنف
 const MAIN_BASE_URL = 'https://anslayer.com/anime/public/anime-comments/';
 const CLIENT_ID = 'android-app2';
 const CLIENT_SECRET = '7befba6263cc14c90d2f1d6da2c5cf9b251bfbbd';
-const TOKEN = '949da63d15c14406d8b369e9b0d049509dbe986c';
+const TOKEN = 'fe0ac33ada3be8173ba4f08f1a1a77f0f4cb59d9';
 
 // المصفوفات والمتغيرات
 let apiTexts = [];
