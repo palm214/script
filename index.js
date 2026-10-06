@@ -129,27 +129,91 @@ async function refreshSession(reason = 'غير معروف') {
 }
 
 function isApiErrorPayload(data) {
-    if (!data || typeof data !== 'object') return false;
+    if (data == null) return false;
 
-    if (data.success === false || data.status === false || data.status === 'error') return true;
-    if (data.error || data.errors) return true;
+    if (typeof data === 'string') {
+        const t = data.toLowerCase();
+        return /\b(error|failed|failure|unauthorized|forbidden|invalid token|expired token|server error|internal server|bad gateway|service unavailable)\b/.test(t)
+            || /خط[أا]|فشل|غير صالح|منتهي|مرفوض|سيرفر|خادم/.test(data);
+    }
 
-    const response = data.response;
-    if (response && typeof response === 'object') {
-        if (response.success === false || response.status === false || response.status === 'error') return true;
-        if (response.error || response.errors) return true;
+    if (typeof data !== 'object') return data === false;
+
+    if (data.success === false || data.ok === false || data.status === false || data.status === 'error') return true;
+    if (data.failed === true || data.failure === true) return true;
+    if (data.error || data.errors || data.exception || data.fault) return true;
+
+    const codeCandidates = [data.code, data.statusCode, data.error_code, data.errorCode];
+    if (codeCandidates.some(code => Number.isFinite(Number(code)) && Number(code) >= 400)) return true;
+
+    const nested = [data.response, data.data, data.result];
+    for (const value of nested) {
+        if (value == null) continue;
+        if (value === false) return true;
+        if (isApiErrorPayload(value)) return true;
+    }
+
+    const text = JSON.stringify(data).toLowerCase();
+    return /unauthorized|forbidden|invalid token|expired token|authentication failed|authorization failed|server error|internal server|bad gateway|service unavailable|request failed|failed to (?:create|add|post|send)|comment.*(?:failed|error)|reply.*(?:failed|error)|خط[أا]|فشل|غير صالح|انتهت الجلسة|الخادم.*(?:خطأ|فشل)|تعذر.*(?:إضافة|إرسال)/.test(text);
+}
+
+// مهم جدًا: ليس كل HTTP error يعني أن التوكن منتهي.
+// مثال: 404 Anime comment not found يجب ألا يستهلك refresh token.
+function isTokenInvalidResponse(status, data) {
+    // هذا يغطي الحالة التي عرضتها: 401 مع Body فارغ.
+    if (status === 401) return true;
+
+    // 403 لا نعتبره مشكلة توكن إلا إذا كان الرد يذكر المصادقة/التوكن صراحة.
+    if (status === 403) {
+        const text = safeJson(data).toLowerCase();
+        return /token|unauthorized|forbidden|auth|credential|جلسة|توكن|مصادقة|صلاحية/.test(text);
+    }
+
+    // أخطاء الخادم الشديدة: نجرب تجديد الجلسة ثم إعادة الطلب مرة واحدة.
+    // هذا لا ينطبق على 404 أو 400 أو 422 وغيرها من أخطاء المعطيات.
+    if (status >= 500 && status <= 599) return true;
+
+    if (data != null) {
+        const text = safeJson(data).toLowerCase();
+        return /invalid token|expired token|token expired|token is invalid|unauthorized|authentication failed|authorization failed|invalid access token|access token.*(?:invalid|expired)|غير صالح.*(?:توكن|رمز)|التوكن.*(?:غير صالح|منتهي)|انتهت.*(?:الجلسة|صلاحية التوكن)|جلسة.*(?:منتهية|غير صالحة)/.test(text);
     }
 
     return false;
 }
 
+function responseIndicatesSuccess(data) {
+    if (data == null) return false;
+    if (isApiErrorPayload(data)) return false;
+
+    if (typeof data === 'boolean') return data === true;
+    if (typeof data === 'string') {
+        const t = data.toLowerCase();
+        return /success|successful|created|ok|done|تم|نجاح|أضيف|اضيف|أنشئ|انشئ|نشر/.test(t);
+    }
+
+    if (typeof data !== 'object') return true;
+
+    // إذا أعطى السيرفر success/ok/status بشكل صريح فنأخذها كما هي.
+    if (data.success === true || data.ok === true || data.status === true || data.status === 'success') return true;
+    if (data.created === true || data.added === true || data.sent === true) return true;
+
+    const nested = [data.response, data.data, data.result];
+    for (const value of nested) {
+        if (value == null) continue;
+        if (value === true) return true;
+        if (typeof value === 'object' && responseIndicatesSuccess(value)) return true;
+        if (typeof value === 'string' && /success|successful|created|ok|done|تم|نجاح|أضيف|اضيف|أنشئ|انشئ|نشر/.test(value.toLowerCase())) return true;
+    }
+
+    // بعض نسخ الـAPI ترجع كائنًا غير صريح النجاح بعد 2xx.
+    // لا نعتبره فشلًا هنا؛ الفشل الصريح فقط يستدعي refresh.
+    return true;
+}
+
 /**
- * أي خطأ من طلبات الـAPI:
- * 1) نُجدد الجلسة مرة واحدة.
- * 2) نعيد نفس الطلب بالـaccess token الجديد.
- * 3) إذا فشل مرة ثانية، لا ندخل في حلقة لا نهائية.
+ * طلب API مع تجديد الجلسة عند فشل الطلب، ثم إعادة المحاولة مرة واحدة فقط.
  */
-async function apiRequest(config, label = 'طلب API') {
+async function apiRequest(config, label = 'طلب API', options = {}) {
     if (!accessToken) {
         await refreshSession('لا يوجد access token عند بداية التشغيل');
     }
@@ -157,51 +221,159 @@ async function apiRequest(config, label = 'طلب API') {
     let didRefresh = false;
 
     while (true) {
+        let res;
         try {
-            const res = await axios({
+            res = await axios({
                 ...config,
                 timeout: config.timeout || 20000,
+                validateStatus: () => true,
                 headers: {
                     ...(config.headers || {}),
                     Authorization: `Bearer ${accessToken}`
                 }
             });
-
-            // بعض الخوادم ترجع 200 ومعه جسم يدل على وجود خطأ.
-            if (isApiErrorPayload(res.data)) {
-                if (didRefresh) {
-                    throw new Error(`الخادم أعاد خطأ بعد تجديد الجلسة: ${JSON.stringify(res.data)}`);
-                }
-
-                didRefresh = true;
-                await refreshSession(`${label} أعاد استجابة خطأ`);
-                continue;
-            }
-
-            return res;
         } catch (error) {
+            // أخطاء الشبكة لا تملك status. نجرّب refresh مرة واحدة كما طلبت.
             if (didRefresh) throw error;
-
             didRefresh = true;
-
-            const status = error.response?.status;
-            const serverMessage = error.response?.data
-                ? JSON.stringify(error.response.data)
-                : error.message;
-
-            console.log(`⚠️ فشل ${label}${status ? ` [HTTP ${status}]` : ''}: ${serverMessage}`);
-
-            // بحسب طلبك: أي خطأ في طلبات الـAPI يستدعي تجديد الجلسة ثم إعادة المحاولة مرة واحدة.
-            await refreshSession(`${label}${status ? ` - HTTP ${status}` : ' - خطأ اتصال/خادم'}`);
+            console.log(`⚠️ فشل ${label} بسبب اتصال/خادم: ${error.message}`);
+            await refreshSession(`${label} — خطأ اتصال/خادم، تجديد الجلسة ثم إعادة المحاولة`);
+            continue;
         }
+
+        const status = res.status;
+        const failedHttp = status < 200 || status >= 300;
+        const failedBody = options.checkBody === true && isApiErrorPayload(res.data);
+        const authFailure = isTokenInvalidResponse(status, res.data);
+
+        // نجاح حقيقي.
+        if (!failedHttp && !failedBody) return res;
+
+        // 404 / 400 / 422 وغيرها: الخطأ متعلق بالطلب/المعرّف، وليس بالتوكن.
+        // لا نستهلك refresh token.
+        if (!authFailure) {
+            return res;
+        }
+
+        // فقط عند خطأ توكن/مصادقة أو 5xx: refresh ثم إعادة الطلب مرة واحدة.
+        if (didRefresh) {
+            const err = new Error(`${label} فشل بعد تجديد الجلسة`);
+            err.response = res;
+            throw err;
+        }
+
+        didRefresh = true;
+        console.log(`🔐 ${label}: السيرفر رفض الطلب (HTTP ${status}) — سيتم تجديد التوكن الآن.`);
+        console.log(`🧾 رد السيرفر: ${safeJson(res.data ?? 'لا يوجد Body')}`);
+        await refreshSession(`${label} — status=${status}`);
     }
+}
+
+function safeJson(value) {
+    try {
+        return typeof value === 'string' ? value : JSON.stringify(value);
+    } catch (_) {
+        return String(value);
+    }
+}
+
+/**
+ * إضافة رد تحديدًا.
+ * أي فشل صريح من endpoint، حتى لو كان HTTP 200، يؤدي إلى:
+ * refresh token -> access token جديد -> retry مرة واحدة.
+ */
+async function createReplyWithAutoRefresh(animeCommentId, replyText) {
+    const config = {
+        method: 'POST',
+        url: `${MAIN_BASE_URL}create-anime-comment-reply`,
+        data: {
+            anime_comment_id: animeCommentId,
+            reply_text: replyText,
+            spoiler: 'No'
+        },
+        headers: {
+            'User-Agent': 'Dalvik/2.1.0 (Linux; U; Android 11; Build/RP1A.200720.011)',
+            'Content-Type': 'application/json',
+            'Client-Id': CLIENT_ID,
+            'Client-Secret': CLIENT_SECRET,
+            'X-Requested-With': 'com.anslayer.app'
+        }
+    };
+
+    async function sendOnce() {
+        return axios({
+            ...config,
+            timeout: 20000,
+            validateStatus: () => true,
+            headers: {
+                ...config.headers,
+                Authorization: `Bearer ${accessToken}`
+            }
+        });
+    }
+
+    let firstResponse;
+    try {
+        firstResponse = await sendOnce();
+    } catch (error) {
+        console.log(`⚠️ خطأ اتصال أثناء إضافة الرد: ${error.message}`);
+        await refreshSession('خطأ اتصال أثناء إضافة الرد — تجديد الجلسة ثم إعادة المحاولة');
+        const retry = await sendOnce();
+        return handleReplyResult(retry, true);
+    }
+
+    const firstSuccess = firstResponse.status >= 200
+        && firstResponse.status < 300
+        && responseIndicatesSuccess(firstResponse.data);
+
+    if (firstSuccess) {
+        return { ok: true, response: firstResponse, refreshed: false };
+    }
+
+    console.log(`⚠️ إضافة الرد لم تنجح بالمحاولة الأولى [HTTP ${firstResponse.status}].`);
+    console.log(`🧾 رد السيرفر: ${safeJson(firstResponse.data ?? 'لا يوجد Body')}`);
+
+    // الحالة المهمة التي عرضتها: 401 + Body فارغ => refresh إجباري.
+    // أما 404 Anime comment not found => لا refresh، لأنه ليس عطل توكن.
+    if (!isTokenInvalidResponse(firstResponse.status, firstResponse.data)) {
+        return { ok: false, response: firstResponse, refreshed: false, expectedFailure: true };
+    }
+
+    console.log(`🔐 السيرفر رفض التوكن (HTTP ${firstResponse.status}).`);
+    console.log('🔄 سيتم استخدام refresh_token المحفوظ لجلب access_token + refresh_token جديدين...');
+
+    await refreshSession(`فشل إضافة الرد بسبب التوكن — HTTP ${firstResponse.status}`);
+
+    const secondResponse = await sendOnce();
+    return handleReplyResult(secondResponse, true);
+}
+
+function handleReplyResult(response, refreshed) {
+    const success = response.status >= 200
+        && response.status < 300
+        && responseIndicatesSuccess(response.data);
+
+    if (success) {
+        console.log(`✅ نجحت إضافة الرد${refreshed ? ' بعد تجديد التوكن' : ''}.`);
+        return { ok: true, response, refreshed };
+    }
+
+    // إذا فشل الطلب مرة ثانية وكان السبب توكن، لا ندخل في loop لا نهائي.
+    if (isTokenInvalidResponse(response.status, response.data)) {
+        const err = new Error(`التوكن ما زال مرفوضًا بعد التجديد. HTTP ${response.status}`);
+        err.response = response;
+        throw err;
+    }
+
+    // 404 comment not found أو أي خطأ متعلق بالبيانات يبقى فشلًا عاديًا بلا refresh إضافي.
+    return { ok: false, response, refreshed, expectedFailure: true };
 }
 
 // ==========================================
 // 📚 المكتبة المحلية فقط
 // ملاحظة: تم حذف الأذكار المرتبطة بصباح/مساء/ليل/عيد/فترة محددة.
 // ==========================================
-const fallbackLibrary = [
+    const fallbackLibrary = [
     // --- مكتبة محلية: آيات منتقاة وأحاديث وأدعية/أذكار عامة ---
     "{ فَاذْكُرُونِي أَذْكُرْكُمْ وَاشْكُرُوا لِي وَلَا تَكْفُرُونِ } [البقرة: 152]",
     "{ يَا أَيُّهَا الَّذِينَ آمَنُوا اسْتَعِينُوا بِالصَّبْرِ وَالصَّلَاةِ ۚ إِنَّ اللَّهَ مَعَ الصَّابِرِينَ } [البقرة: 153]",
@@ -1292,26 +1464,22 @@ async function testCommentsFlow(animeId) {
     console.log(`\n📬 [أنمي ${animeId}]: جارٍ إرسال رد...`);
 
     try {
-        await apiRequest({
-            method: 'POST',
-            url: `${MAIN_BASE_URL}create-anime-comment-reply`,
-            data: {
-                anime_comment_id: firstCommentId,
-                reply_text: replyText,
-                spoiler: 'No'
-            },
-            headers: {
-                'User-Agent': 'Dalvik/2.1.0 (Linux; U; Android 11; Build/RP1A.200720.011)',
-                'Content-Type': 'application/json',
-                'Client-Id': CLIENT_ID,
-                'Client-Secret': CLIENT_SECRET,
-                'X-Requested-With': 'com.anslayer.app'
-            }
-        }, `إرسال رد الأنمي ${animeId}`);
+        const replyResult = await createReplyWithAutoRefresh(firstCommentId, replyText);
 
-        console.log(`✅ [أنمي ${animeId}] تم نشر: ${replyText.substring(0, 80)}${replyText.length > 80 ? '...' : ''}`);
+        if (replyResult.ok) {
+            console.log(`✅ [أنمي ${animeId}] تم نشر: ${replyText.substring(0, 80)}${replyText.length > 80 ? '...' : ''}`);
+            console.log(`📨 HTTP: ${replyResult.response.status}${replyResult.refreshed ? ' | ♻️ بعد تجديد التوكن' : ''}`);
+        } else {
+            console.log(`ℹ️ [أنمي ${animeId}] لم تتم إضافة الرد. HTTP: ${replyResult.response?.status || 'غير معروف'}`);
+            if (replyResult.response?.data) {
+                console.log(`🧾 الرد من السيرفر: ${safeJson(replyResult.response.data)}`);
+            }
+        }
     } catch (error) {
-        console.log(`❌ فشل إرسال الرد للأنمي ${animeId} بعد محاولة تجديد الجلسة: ${error.message}`);
+        console.log(`❌ فشل إرسال الرد للأنمي ${animeId}: ${error.message}`);
+        if (error.response?.data) {
+            console.log(`🧾 الرد الأخير من السيرفر: ${safeJson(error.response.data)}`);
+        }
     }
 }
 
