@@ -5,10 +5,10 @@ const ANIME_ID = 2025;
 const ANIME_LOOP_TIME = 10 * 8 * 1000; // 80 ثانية (نفس قيمة السكربت الأصلي)
 
 // ضع refresh_token هنا، أو الأفضل استخدم متغير البيئة REFRESH_TOKEN.
-const INITIAL_REFRESH_TOKEN = process.env.REFRESH_TOKEN || 'e160961dc88b8f45f4697b7cccbda3165f3010ed';
+const INITIAL_REFRESH_TOKEN = process.env.REFRESH_TOKEN || '53db92432048b577299bb56c9162ca1b562d5d9d';
 
 // يمكن ترك access token فارغًا؛ إذا كان فارغًا سيحاول السكربت الحصول عليه من refresh token.
-const INITIAL_ACCESS_TOKEN = process.env.ACCESS_TOKEN || '2d1fe3e80ba26314bd708d1b88f8950b25e3b009';
+const INITIAL_ACCESS_TOKEN = process.env.ACCESS_TOKEN || 'e160961dc88b8f45f4697b7cccbda3165f3010ed';
 
 // ملف محلي لحفظ آخر access/refresh token تلقائيًا.
 const TOKEN_STORE_FILE = require('path').join(__dirname, 'token_store.json');
@@ -65,8 +65,12 @@ function saveTokenStore() {
 }
 
 const storedTokens = loadTokenStore();
-if (storedTokens.refresh_token) refreshToken = String(storedTokens.refresh_token).trim();
+// الأولوية: متغيرات البيئة الصريحة، ثم آخر توكن محفوظ، ثم القيم الابتدائية إن وُجدت.
+// لا نعود أبدًا إلى access_token قديم مكتوب داخل السكربت بعد إعادة التشغيل.
+if (!refreshToken && storedTokens.refresh_token) refreshToken = String(storedTokens.refresh_token).trim();
 if (!accessToken && storedTokens.access_token) accessToken = String(storedTokens.access_token).trim();
+if (!refreshToken && INITIAL_REFRESH_TOKEN) refreshToken = INITIAL_REFRESH_TOKEN.trim();
+if (!accessToken && INITIAL_ACCESS_TOKEN) accessToken = INITIAL_ACCESS_TOKEN.trim();
 
 function hasRefreshToken() {
     return Boolean(refreshToken && !refreshToken.includes('ضع_الريفرش_توكن_هنا'));
@@ -1501,6 +1505,11 @@ setInterval(async () => {
 // ==========================================
 (async () => {
     try {
+        if (process.env.TEST_REFRESH_ONLY === '1') {
+            await refreshSession('اختبار يدوي للتجديد');
+            console.log('✅ اختبار التجديد اكتمل وحُفظت آخر قيمة في token_store.json.');
+            process.exit(0);
+        }
         console.log(`📚 تم تحميل ${islamicTexts.length} نصًا محليًا داخل المكتبة.`);
 
         // إذا لم يوجد access token في الإعدادات أو token_store.json، نطلبه من refresh token.
