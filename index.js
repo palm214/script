@@ -65,8 +65,12 @@ function saveTokenStore() {
 }
 
 const storedTokens = loadTokenStore();
-if (storedTokens.refresh_token) refreshToken = String(storedTokens.refresh_token).trim();
+// الأولوية: متغيرات البيئة الصريحة، ثم آخر توكن محفوظ، ثم القيم الابتدائية إن وُجدت.
+// لا نعود أبدًا إلى access_token قديم مكتوب داخل السكربت بعد إعادة التشغيل.
+if (!refreshToken && storedTokens.refresh_token) refreshToken = String(storedTokens.refresh_token).trim();
 if (!accessToken && storedTokens.access_token) accessToken = String(storedTokens.access_token).trim();
+if (!refreshToken && INITIAL_REFRESH_TOKEN) refreshToken = INITIAL_REFRESH_TOKEN.trim();
+if (!accessToken && INITIAL_ACCESS_TOKEN) accessToken = INITIAL_ACCESS_TOKEN.trim();
 
 function hasRefreshToken() {
     return Boolean(refreshToken && !refreshToken.includes('ضع_الريفرش_توكن_هنا'));
@@ -1426,16 +1430,23 @@ async function testCommentsFlow(animeId) {
     try {
         const jsonQuery = encodeURIComponent(JSON.stringify({ anime_id: animeId, page: 1 }));
 
-        const commentsRes = await apiRequest({
-            method: 'GET',
-            url: `${MAIN_BASE_URL}get-anime-comments?json=${jsonQuery}`,
-            headers: {
-                'User-Agent': 'Dalvik/2.1.0 (Linux; U; Android 11; Build/RP1A.200720.011)',
-                'Client-Id': CLIENT_ID,
-                'Client-Secret': CLIENT_SECRET,
-                'X-Requested-With': 'com.anslayer.app'
+        // جلب التعليقات endpoint عام: لا Authorization ولا refresh عند فشله.
+        const commentsRes = await axios.get(
+            `${MAIN_BASE_URL}get-anime-comments?json=${jsonQuery}`,
+            {
+                timeout: 20000,
+                validateStatus: () => true,
+                headers: {
+                    'User-Agent': 'Dalvik/2.1.0 (Linux; U; Android 11; Build/RP1A.200720.011)',
+                    'Client-Id': CLIENT_ID,
+                    'Client-Secret': CLIENT_SECRET,
+                    'X-Requested-With': 'com.anslayer.app'
+                }
             }
-        }, `جلب تعليقات الأنمي ${animeId}`);
+        );
+        if (commentsRes.status < 200 || commentsRes.status >= 300) {
+            throw new Error(`فشل جلب التعليقات HTTP ${commentsRes.status}`);
+        }
 
         const resBody = commentsRes.data?.response;
         let commentsList = [];
@@ -1501,6 +1512,11 @@ setInterval(async () => {
 // ==========================================
 (async () => {
     try {
+        if (process.env.TEST_REFRESH_ONLY === '1') {
+            await refreshSession('اختبار يدوي للتجديد');
+            console.log('✅ اختبار التجديد اكتمل وحُفظت آخر قيمة في token_store.json.');
+            process.exit(0);
+        }
         console.log(`📚 تم تحميل ${islamicTexts.length} نصًا محليًا داخل المكتبة.`);
 
         // إذا لم يوجد access token في الإعدادات أو token_store.json، نطلبه من refresh token.
