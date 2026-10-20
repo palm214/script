@@ -5,15 +5,21 @@ const ANIME_ID = 2025;
 const ANIME_LOOP_TIME = 10 * 8 * 1000; // 80 ثانية (نفس قيمة السكربت الأصلي)
 
 // التوكنات الحالية؛ سيحدّث السكربت هاتين القيمتين داخل هذا الملف بعد نجاح التجديد.
-const DEFAULT_REFRESH_TOKEN = 'b22d097f0091fb85665f299b096e225310a4b8f4';
-const DEFAULT_ACCESS_TOKEN = '44bdb47d9bde0d2379542acd0071a74637b59ead';
+const DEFAULT_REFRESH_TOKEN = 'be485bc686335131bba5fc2532d1b897f87e50cb';
+const DEFAULT_ACCESS_TOKEN = '7e265b850795801d1b3140309ee007f90985eb73';
 
-// أخطاء API العادية لا تجدد التوكن. التجديد الدوري كل 24 ساعة، وفشل التجديد نفسه يعيد المحاولة بعد 5 دقائق.
+// أدخل عدد الساعات التي مضت منذ آخر تحديث للتوكن.
+// مثال: إذا بقيت 3 ساعات على انتهاء التوكن، اكتب 21. الافتراضي 0 يعني البدء من الآن.
+// بعد نجاح التجديد يبدأ العدّ من جديد تلقائيًا لمدة 24 ساعة.
+const HOURS_SINCE_LAST_TOKEN_UPDATE = 3;
+
+// لا تجدد أخطاء API العادية التوكن. إذا فشلت محاولة التجديد المجدولة نفسها، أعدها بعد 5 دقائق.
 const TOKEN_REFRESH_INTERVAL = 24 * 60 * 60 * 1000;
 const TOKEN_REFRESH_RETRY_INTERVAL = 5 * 60 * 1000;
-// يحدّث السكربت هذين الوقتين داخل الكود للحفاظ على الجدول بعد إعادة التشغيل.
+// القيم التالية يحدّثها السكربت داخل الملف للحفاظ على موعد التجديد بعد إعادة التشغيل.
 const LAST_REFRESH_ATTEMPT_AT = 0;
 const NEXT_REFRESH_RETRY_AT = 0;
+const APPLIED_HOURS_SINCE_LAST_TOKEN_UPDATE = -1;
 
 const axios = require('axios');
 const express = require('express');
@@ -38,6 +44,7 @@ let refreshToken = DEFAULT_REFRESH_TOKEN.trim();
 let refreshPromise = null;
 let lastRefreshAttemptAt = Number(LAST_REFRESH_ATTEMPT_AT) || 0;
 let nextRefreshRetryAt = Number(NEXT_REFRESH_RETRY_AT) || 0;
+let appliedHoursSetting = Number(APPLIED_HOURS_SINCE_LAST_TOKEN_UPDATE);
 
 /**
  * يحفظ access token وrefresh token ووقت آخر محاولة داخل ثوابت هذا الملف.
@@ -51,7 +58,8 @@ function saveTokensIntoSource() {
             .replace(/const DEFAULT_REFRESH_TOKEN = ['"][^'\"]*['"];?/, `const DEFAULT_REFRESH_TOKEN = ${JSON.stringify(refreshToken)};`)
             .replace(/const DEFAULT_ACCESS_TOKEN = ['"][^'\"]*['"];?/, `const DEFAULT_ACCESS_TOKEN = ${JSON.stringify(accessToken)};`)
             .replace(/const LAST_REFRESH_ATTEMPT_AT = \d+;/, `const LAST_REFRESH_ATTEMPT_AT = ${Math.trunc(lastRefreshAttemptAt)};`)
-            .replace(/const NEXT_REFRESH_RETRY_AT = \d+;/, `const NEXT_REFRESH_RETRY_AT = ${Math.trunc(nextRefreshRetryAt)};`);
+            .replace(/const NEXT_REFRESH_RETRY_AT = \d+;/, `const NEXT_REFRESH_RETRY_AT = ${Math.trunc(nextRefreshRetryAt)};`)
+            .replace(/const APPLIED_HOURS_SINCE_LAST_TOKEN_UPDATE = -?\d+(?:\.\d+)?;/, `const APPLIED_HOURS_SINCE_LAST_TOKEN_UPDATE = ${Number(appliedHoursSetting)};`);
 
         if (updated === original) {
             throw new Error('لم يعثر السكربت على ثوابت التوكنات أو وقت التجديد داخل الملف.');
@@ -124,10 +132,19 @@ async function refreshSession(reason = 'التجديد المجدول كل 24 س
 // إذا فشلت محاولة التجديد نفسها، تُعاد بعد 5 دقائق، وتتكرر كل 5 دقائق حتى تنجح.
 // موعد إعادة المحاولة يُحفظ داخل الكود للمساعدة على استعادته بعد إعادة التشغيل.
 function startScheduledTokenRefresh() {
-    if (!lastRefreshAttemptAt && !nextRefreshRetryAt) {
-        // أول تشغيل: ابدأ حساب الـ24 ساعة من الآن دون تجديد فوري.
-        lastRefreshAttemptAt = Date.now();
+    // السماح بإدخال عمر التوكن يدويًا؛ تغيير هذا الرقم يعيد تأسيس الجدول.
+    // إذا لم يتغير الرقم، نستخدم الطابع الزمني المحفوظ داخل الملف حتى لا يبدأ العد من الصفر بعد كل إعادة تشغيل.
+    const configuredHoursRaw = Number(HOURS_SINCE_LAST_TOKEN_UPDATE);
+    const configuredHours = Number.isFinite(configuredHoursRaw)
+        ? Math.min(24, Math.max(0, configuredHoursRaw))
+        : 0;
+
+    if (!lastRefreshAttemptAt || appliedHoursSetting !== configuredHours) {
+        lastRefreshAttemptAt = Date.now() - (configuredHours * 60 * 60 * 1000);
+        nextRefreshRetryAt = 0;
+        appliedHoursSetting = configuredHours;
         saveTokensIntoSource();
+        console.log(`🕒 إعداد عمر التوكن: ${configuredHours} ساعة؛ ستتم المحاولة المجدولة بعد نحو ${Math.max(0, 24 - configuredHours)} ساعة.`);
     }
 
     let scheduledTimer = null;
