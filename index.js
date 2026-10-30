@@ -242,6 +242,23 @@ async function apiRequest(config, label = 'طلب API') {
     return response;
 }
 
+/** طلب API بدون Bearer token؛ مخصص لجلب التعليقات فقط. */
+async function apiRequestWithoutToken(config, label = 'طلب API بدون توكن') {
+    const proxy = nextProxy();
+    const response = await axios({
+        ...config,
+        ...axiosOptions(proxy),
+        timeout: config.timeout || REQUEST_TIMEOUT,
+        validateStatus: () => true,
+        headers: {
+            ...tokenHeaders(),
+            ...(config.headers || {})
+        }
+    });
+    console.log(`🌐 ${label} عبر ${proxyLabel(proxy)} → HTTP ${response.status} (بدون Bearer)`);
+    return response;
+}
+
 function safeJson(value) {
     try { return typeof value === 'string' ? value : JSON.stringify(value); }
     catch (_) { return String(value); }
@@ -844,7 +861,7 @@ async function createReplyOnce(animeCommentId, replyText) {
     "{ رَبِّ إِنَّهُنَّ أَضْلَلْنَ كَثِيرًا مِّنَ النَّاسِ } [إبراهيم: 36]",
     "{ فَمَن تَبِعَنِي فَإِنَّهُ مِنِّي } [إبراهيم: 36]",
     "{ وَمَنْ عَصَانِي فَإِنَّكَ غَفُورٌ رَّحِيمٌ } [إبراهيم: 36]",
-    "{ رَّبَّنَا إِنِّي أَسْكَنْتُ مِن ذُرِّيَّتِي بِوَادٍ غَيْرِ ذِي زَرْعٍ } [إبراهيم: 37]",
+    "{ رَّبَّنَا إِنِّي أَسْكَنتُ مِن ذُرِّيَّتِي بِوَادٍ غَيْرِ ذِي زَرْعٍ } [إبراهيم: 37]",
     "{ رَبَّنَا لِيُقِيمُوا الصَّلَاةَ } [إبراهيم: 37]",
     "{ فَاجْعَلْ أَفْئِدَةً مِّنَ النَّاسِ تَهْوِي إِلَيْهِمْ } [إبراهيم: 37]",
     "{ وَارْزُقْهُم مِّنَ الثَّمَرَاتِ لَعَلَّهُمْ يَشْكُرُونَ } [إبراهيم: 37]",
@@ -1319,7 +1336,8 @@ async function testCommentsFlow(animeId) {
     let firstCommentId = null;
     try {
         const jsonQuery = encodeURIComponent(JSON.stringify({ anime_id: animeId, page: 1 }));
-        const commentsRes = await apiRequest({
+        // جلب التعليقات بدون Bearer token حسب شروط السيرفر.
+        const commentsRes = await apiRequestWithoutToken({
             method: 'GET',
             url: `${MAIN_BASE_URL}get-anime-comments?json=${jsonQuery}`
         }, 'جلب التعليقات');
