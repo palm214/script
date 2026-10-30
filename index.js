@@ -16,7 +16,7 @@ app.listen(PORT, () => console.log(`🌐 الخادم يعمل على المنف
 const MAIN_BASE_URL = process.env.MAIN_BASE_URL || 'https://anslayer.com/anime/public/anime-comments/';
 const REFRESH_URL = process.env.REFRESH_URL || 'https://anslayer.com/anime/public/oauth/refresh-token';
 const CLIENT_ID = process.env.CLIENT_ID || 'android-app2';
-const CLIENT_SECRET = process.env.CLIENT_SECRET || '';
+const CLIENT_SECRET = process.env.CLIENT_SECRET || '7befba6263cc14c90d2f1d6da2c5cf9b251bfbbd';
 const REQUESTED_WITH = process.env.REQUESTED_WITH || 'com.anslayer.app';
 const USER_AGENT = process.env.USER_AGENT || 'Dalvik/2.1.0 (Linux; U; Android 11; Build/SP1A.210812.016)';
 
@@ -70,7 +70,7 @@ console.log(`🔁 عدد البروكسيات المحملة: ${PROXIES.length}`
 // لا تضع التوكنات داخل Git أو داخل الكود. اضبطها في Render:
 // ACCESS_TOKEN و REFRESH_TOKEN و CLIENT_SECRET.
 let accessToken = String(process.env.ACCESS_TOKEN || '9f6d95661b2de7f01e3bc2d72896f9c69a99808f').trim();
-let refreshToken = String(process.env.REFRESH_TOKEN || '').trim();
+let refreshToken = String(process.env.REFRESH_TOKEN || 'd368b4cd3af3f6312a0169bda77687d97bb0df33').trim();
 let refreshPromise = null;
 let refreshTimer = null;
 let lastRefreshAt = 0;
