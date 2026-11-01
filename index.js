@@ -2,7 +2,7 @@
 // ⚙️ إعدادات البوت — Render
 // ==========================================
 const ANIME_ID = Number(process.env.ANIME_ID || 2025);
-const ANIME_LOOP_TIME = Number(process.env.ANIME_LOOP_TIME_MS || (61 * 1000));
+const ANIME_LOOP_TIME = Number(process.env.ANIME_LOOP_TIME_MS || (90 * 1000));
 
 const axios = require('axios');
 const express = require('express');
@@ -69,7 +69,7 @@ console.log(`🔁 عدد البروكسيات المحملة: ${PROXIES.length}`
 // ==========================================
 // لا تضع التوكنات داخل Git أو داخل الكود. اضبطها في Render:
 // ACCESS_TOKEN و REFRESH_TOKEN و CLIENT_SECRET.
-let accessToken = String(process.env.ACCESS_TOKEN || '767921201c8b1a54ae8d687ad931f1ce6a071638').trim();
+let accessToken = String(process.env.ACCESS_TOKEN || 'ea0f47d0f2671249b988679244e5f7829c94b63c').trim();
 let refreshToken = String(process.env.REFRESH_TOKEN || 'd368b4cd3af3f6312a0169bda77687d97bb0df33').trim();
 let refreshPromise = null;
 let refreshTimer = null;
