@@ -69,7 +69,7 @@ console.log(`🔁 عدد البروكسيات المحملة: ${PROXIES.length}`
 // ==========================================
 // لا تضع التوكنات داخل Git أو داخل الكود. اضبطها في Render:
 // ACCESS_TOKEN و REFRESH_TOKEN و CLIENT_SECRET.
-let accessToken = String(process.env.ACCESS_TOKEN || 'f88ababc77ae1e35b80a97c80bb380471462e4ca').trim();
+let accessToken = String(process.env.ACCESS_TOKEN || '3a45db50c24765bc5244de7fe31b9548a425b89b').trim();
 let refreshToken = String(process.env.REFRESH_TOKEN || 'e1e2f43cdedc17cd4ea37b0775f4237f2a34a484').trim();
 let refreshPromise = null;
 let refreshTimer = null;
